@@ -1,10 +1,8 @@
 ﻿using HarmonyLib;
 using UnityEngine;
-using UnityEngine.Diagnostics;
 
 namespace AutoPinOres
 {
-
     [HarmonyPatch(typeof(Player), "UpdateHover")]
     class PlayerHoverPatch
     {
@@ -22,66 +20,124 @@ namespace AutoPinOres
             }
 
             Transform rootTransform = hoverObj.transform.root;
-            GameObject targetObj = rootTransform != null ? rootTransform.gameObject : hoverObj;
+            GameObject rootObj = rootTransform != null ? rootTransform.gameObject : hoverObj;
+            GameObject parentObj = hoverObj.transform.parent != null ? hoverObj.transform.parent.gameObject : null;
 
-            var existingPo = targetObj.GetComponent<PinnedObject>();
-            if (existingPo == null)
+            string pinName = CheckOreName(hoverObj.name)
+                ?? (parentObj != null ? CheckOreName(parentObj.name) : null)
+                ?? CheckOreName(rootObj.name);
+
+            if (pinName == null && IsCopperNode(hoverObj))
             {
-                existingPo = hoverObj.GetComponent<PinnedObject>();
+                pinName = "Copper";
             }
+
+            if (pinName == null)
+            {
+                return;
+            }
+
+            MineRock5 mr5 = hoverObj.GetComponentInParent<MineRock5>();
+            GameObject targetObj = mr5 != null ? mr5.gameObject : (parentObj != null ? parentObj : rootObj);
+
+            var existingPo = targetObj.GetComponent<PinnedObject>()
+                ?? hoverObj.GetComponent<PinnedObject>();
 
             if (existingPo != null && existingPo.HasActivePin())
             {
                 return;
             }
 
-            string targetName = targetObj.name.Replace("(Clone)", "").Trim();
-            string hoverName = hoverObj.name.Replace("(Clone)", "").Trim();
-            string pinName = null;
-
-            pinName = CheckOreName(targetName);
-            if (pinName == null)
+            if (existingPo != null)
             {
-                pinName = CheckOreName(hoverName);
+                existingPo.Init(pinName);
             }
-
-            if (pinName != null)
+            else
             {
-                if (existingPo != null)
-                {
-                    existingPo.Init(pinName);
-                }
-                else
-                {
-                    var po = targetObj.AddComponent<PinnedObject>();
-                    po.Init(pinName);
-                }
+                var po = targetObj.AddComponent<PinnedObject>();
+                po.Init(pinName);
             }
         }
 
         private static string CheckOreName(string name)
         {
-            switch (name)
+            if (string.IsNullOrEmpty(name))
             {
-                case "MineRock_Tin":
-                    return "Tin";
-                case "MineRock_Copper":
-                case "rock4_copper":
-                    return "Copper";
-                case "MineRock_Obsidian":
-                    return "Obsidian";
-                case "MineRock_Silver":
-                case "silvervein":
-                    return "Silver";
-                case "MineRock_Meteorite":
-                case "MineRock_Flametal":
-                case "LeviathanLava":
-                    return "Flametal";
-                case "MineRock_Iron":
-                    return "Iron";
-                default:
-                    return null;
+                return null;
             }
+
+            string lower = name.ToLower();
+
+            if (lower.Contains("copper"))
+            {
+                return "Copper";
+            }
+
+            if (lower.Contains("tin"))
+            {
+                return "Tin";
+            }
+
+            if (lower.Contains("obsidian"))
+            {
+                return "Obsidian";
+            }
+
+            if (lower.Contains("silver"))
+            {
+                return "Silver";
+            }
+
+            if (lower.Contains("meteorite") || lower.Contains("flametal") || lower.Contains("leviathanlava"))
+            {
+                return "Flametal";
+            }
+
+            if (lower.Contains("iron") || lower.Contains("bogiron"))
+            {
+                return "Iron";
+            }
+
+            return null;
+        }
+
+        private static bool IsCopperNode(GameObject obj)
+        {
+            if (obj == null)
+            {
+                return false;
+            }
+
+            if (obj.name.ToLower().Contains("copper"))
+            {
+                return true;
+            }
+
+            MineRock5 mr5 = obj.GetComponentInParent<MineRock5>();
+            if (mr5 != null)
+            {
+                if (mr5.m_name == "$piece_deposit" || mr5.m_name.ToLower().Contains("copper"))
+                {
+                    return true;
+                }
+
+                if (mr5.gameObject.name.ToLower().Contains("copper"))
+                {
+                    return true;
+                }
+            }
+
+            Destructible dest = obj.GetComponentInParent<Destructible>();
+            if (dest != null)
+            {
+                HoverText ht = dest.GetComponent<HoverText>();
+                if (ht != null && (ht.m_text == "$piece_deposit" || ht.m_text.ToLower().Contains("copper")))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }
